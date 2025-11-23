@@ -1,6 +1,6 @@
 # Bencode Standalone-HTML-Editor
 
-A modern, standalone web-based editor for Bencode files (.torrent, .bencode) with a sleek dark interface and real-time editing capabilities.
+A modern, standalone web-based editor for Bencode files (.torrent, .bencode, .fastresume) with a sleek dark interface and real-time editing capabilities.
 
 ![Bencode Editor](https://img.shields.io/badge/bencode-editor-38bdf8)
 ![License](https://img.shields.io/badge/license-MIT-green)
