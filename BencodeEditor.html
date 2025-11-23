@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bencode Editor</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+
+    <!-- CodeMirror -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.min.css">
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(148, 163, 184, 0.1);
+            --accent-color: #38bdf8;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-code: 'Fira Code', 'Consolas', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-ui);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            position: relative;
+        }
+
+        .header {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 2rem;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+
+        .brand {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            flex: 1;
+            justify-content: center;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            margin: 0;
+        }
+
+        .info-item span:first-child {
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            font-family: var(--font-code);
+            color: var(--text-primary);
+        }
+
+        .actions {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        button {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent-color);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-family: var(--font-ui);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        button:hover {
+            background: rgba(56, 189, 248, 0.2);
+            transform: translateY(-1px);
+        }
+
+        button.primary {
+            background: var(--accent-color);
+            color: #0f172a;
+            border: none;
+        }
+
+        button.primary:hover {
+            background: #0ea5e9;
+        }
+
+        button.primary.disabled {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--accent-color);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            cursor: not-allowed;
+        }
+
+        button.primary.disabled:hover {
+            background: rgba(56, 189, 248, 0.1);
+            transform: none;
+        }
+
+        button.success {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .editor-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: rgba(15, 23, 42, 0.5);
+            overflow: hidden;
+        }
+
+        .editor-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* CodeMirror Customization */
+        .CodeMirror {
+            height: 100%;
+            font-family: var(--font-code);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* Bright Selection Highlight */
+        .CodeMirror-selected {
+            background: rgba(56, 189, 248, 0.4) !important;
+        }
+
+        .CodeMirror-focused .CodeMirror-selected {
+            background: rgba(56, 189, 248, 0.5) !important;
+        }
+
+        .CodeMirror-line::selection,
+        .CodeMirror-line>span::selection,
+        .CodeMirror-line>span>span::selection {
+            background: rgba(56, 189, 248, 0.4) !important;
+        }
+
+        /* Drag Overlay */
+        .drag-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .drag-active .drag-overlay {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .drag-message {
+            border: 2px dashed var(--accent-color);
+            padding: 3rem;
+            border-radius: 12px;
+            text-align: center;
+            color: var(--accent-color);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 6px;
+            border: 3px solid rgba(15, 23, 42, 0.5);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+<!-- Credits -->
+    <div style="position: absolute; bottom: 1rem; right: 1.5rem; z-index: 100; font-size: 0.75rem; color: var(--text-secondary); font-family: var(--font-ui); text-align: right; line-height: 1.6;">
+        <div style="opacity: 0.7;">
+            Vibe-coded by <span style="color: var(--accent-color);">Piknockyou</span>
+        </div>
+        <div style="opacity: 0.5; font-size: 0.7rem;">
+            Based on <a href="https://github.com/Chocobo1/bencode_online" target="_blank" rel="noopener" style="color: var(--text-secondary); text-decoration: none; border-bottom: 1px dotted var(--text-secondary);">Bencode Online</a> by Chocobo1
+        </div>
+    </div>
+    <div class="app-container" id="app">
+        <div class="header">
+            <div class="brand">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+                    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+                    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+                </svg>
+                Bencode Editor
+            </div>
+
+            <div class="file-info">
+                <div class="info-item">
+                    <span>Name:</span>
+                    <span class="info-value" id="file-name">-</span>
+                </div>
+                <div class="info-item">
+                    <span>Size:</span>
+                    <span class="info-value" id="file-size">-</span>
+                </div>
+                <div class="info-item">
+                    <span>Type:</span>
+                    <span class="info-value" id="file-type">-</span>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button onclick="document.getElementById('file-input').click()">
+                    📂 Open
+                </button>
+                <button class="primary disabled" id="btn-encode">
+                    💾 Save
+                </button>
+                <button id="btn-copy">
+                    📋 Copy
+                </button>
+            </div>
+            <input type="file" id="file-input" hidden>
+        </div>
+
+        <div class="editor-area">
+            <div class="editor-container">
+                <textarea id="code-input"></textarea>
+            </div>
+        </div>
+
+        <div class="drag-overlay">
+            <div class="drag-message">
+                <h2>Drop file to open</h2>
+                <p>Supports .torrent and .bencode files</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- CodeMirror Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/javascript/javascript.min.js"></script>
+
+    <script>
+        const Bencode = {
+            decode: function (buffer) {
+                if (!buffer || buffer.length === 0) return null;
+                const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+                let position = 0;
+
+                function getIntFromBuffer(start, end) {
+                    let sum = 0;
+                    let sign = 1;
+                    for (let i = start; i < end; i++) {
+                        const num = data[i];
+                        if (num < 58 && num >= 48) sum = sum * 10 + (num - 48);
+                        else if (i === start && num === 45) sign = -1;
+                        else if (num === 46) break;
+                        else if (i === start && num === 43) continue;
+                        else throw new Error('Invalid number at position ' + i);
+                    }
+                    return sum * sign;
+                }
+
+                function find(chr) {
+                    for (let i = position; i < data.length; i++) {
+                        if (data[i] === chr) return i;
+                    }
+                    throw new Error('Missing delimiter: ' + String.fromCharCode(chr));
+                }
+
+                function decodeNext() {
+                    const chr = data[position];
+                    if (chr === 0x64) return decodeDict();
+                    if (chr === 0x6C) return decodeList();
+                    if (chr === 0x69) return decodeInteger();
+                    return decodeBuffer();
+                }
+
+                function decodeDict() {
+                    position++;
+                    const dict = new Map();
+                    while (data[position] !== 0x65) {
+                        const key = decodeBuffer();
+                        const value = decodeNext();
+                        dict.set(key, value);
+                    }
+                    position++;
+                    return dict;
+                }
+
+                function decodeList() {
+                    position++;
+                    const list = [];
+                    while (data[position] !== 0x65) list.push(decodeNext());
+                    position++;
+                    return list;
+                }
+
+                function decodeInteger() {
+                    const end = find(0x65);
+                    const number = getIntFromBuffer(position + 1, end);
+                    position = end + 1;
+                    return number;
+                }
+
+                function decodeBuffer() {
+                    const sep = find(0x3A);
+                    const length = getIntFromBuffer(position, sep);
+                    const start = sep + 1;
+                    const end = start + length;
+                    position = end;
+                    return data.slice(start, end);
+                }
+
+                return decodeNext();
+            },
+
+            encode: function (obj) {
+                const buffers = [];
+                function encodeAny(value) {
+                    if (typeof value === 'number') encodeInteger(value);
+                    else if (value instanceof Uint8Array || value instanceof ArrayBuffer) encodeBuffer(value);
+                    else if (Array.isArray(value)) encodeList(value);
+                    else if (value instanceof Map) encodeDict(value);
+                    else if (typeof value === 'string') encodeBuffer(new TextEncoder().encode(value));
+                    else throw new Error('Unsupported type: ' + typeof value);
+                }
+
+                function encodeInteger(num) { buffers.push(new TextEncoder().encode('i' + num + 'e')); }
+                function encodeBuffer(buf) {
+                    const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+                    buffers.push(new TextEncoder().encode(bytes.length + ':'));
+                    buffers.push(bytes);
+                }
+                function encodeList(list) {
+                    buffers.push(new TextEncoder().encode('l'));
+                    list.forEach(item => encodeAny(item));
+                    buffers.push(new TextEncoder().encode('e'));
+                }
+                function encodeDict(dict) {
+                    buffers.push(new TextEncoder().encode('d'));
+                    const sortedKeys = Array.from(dict.keys()).sort((a, b) => {
+                        const aBytes = a instanceof Uint8Array ? a : new TextEncoder().encode(a);
+                        const bBytes = b instanceof Uint8Array ? b : new TextEncoder().encode(b);
+                        for (let i = 0; i < Math.min(aBytes.length, bBytes.length); i++) {
+                            if (aBytes[i] !== bBytes[i]) return aBytes[i] - bBytes[i];
+                        }
+                        return aBytes.length - bBytes.length;
+                    });
+                    sortedKeys.forEach(key => {
+                        encodeAny(key);
+                        encodeAny(dict.get(key));
+                    });
+                    buffers.push(new TextEncoder().encode('e'));
+                }
+
+                encodeAny(obj);
+                const totalLength = buffers.reduce((sum, buf) => sum + buf.length, 0);
+                const result = new Uint8Array(totalLength);
+                let offset = 0;
+                buffers.forEach(buf => {
+                    result.set(buf, offset);
+                    offset += buf.length;
+                });
+                return result;
+            }
+        };
+
+        function convertToJSON(data) {
+            if (data instanceof Map) {
+                const obj = {};
+                for (const [key, value] of data) {
+                    const keyStr = new TextDecoder().decode(key);
+                    obj[keyStr] = convertToJSON(value);
+                }
+                return obj;
+            } else if (data instanceof Uint8Array) {
+                try {
+                    return new TextDecoder('utf-8', { fatal: true }).decode(data);
+                } catch (e) {
+                    // Match original implementation: <hex>0A 0B 0C ...</hex>
+                    const hexStr = Array.from(data).map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+                    return '<hex>' + hexStr + '</hex>';
+                }
+            } else if (Array.isArray(data)) {
+                return data.map(convertToJSON);
+            }
+            return data;
+        }
+
+        function convertFromJSON(data) {
+            if (typeof data === 'string') {
+                // Check for hex format: <hex>...</hex>
+                if (data.startsWith('<hex>') && data.endsWith('</hex>')) {
+                    const hex = data.slice(5, -6).replace(/\s+/g, '');
+                    if (/^[0-9a-fA-F]*$/.test(hex) && hex.length % 2 === 0) {
+                        const bytes = new Uint8Array(hex.length / 2);
+                        for (let i = 0; i < hex.length; i += 2) {
+                            bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+                        }
+                        return bytes;
+                    }
+                }
+                // Legacy support for 0x format
+                else if (data.startsWith('0x') && data.length > 2) {
+                    const hex = data.slice(2);
+                    if (/^[0-9a-fA-F]+$/.test(hex) && hex.length % 2 === 0) {
+                        const bytes = new Uint8Array(hex.length / 2);
+                        for (let i = 0; i < hex.length; i += 2) {
+                            bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+                        }
+                        return bytes;
+                    }
+                }
+                return new TextEncoder().encode(data);
+            } else if (Array.isArray(data)) {
+                return data.map(convertFromJSON);
+            } else if (typeof data === 'object' && data !== null) {
+                const map = new Map();
+                for (const [key, value] of Object.entries(data)) {
+                    map.set(new TextEncoder().encode(key), convertFromJSON(value));
+                }
+                return map;
+            }
+            return data;
+        }
+
+        // Initialize CodeMirror
+        const editor = CodeMirror.fromTextArea(document.getElementById('code-input'), {
+            mode: { name: "javascript", json: true },
+            theme: "material-darker",
+            lineNumbers: true,
+            lineWrapping: true,
+            tabSize: 2,
+            indentWithTabs: false,
+            scrollbarStyle: "native"
+        });
+
+        const app = document.getElementById('app');
+        let currentFileName = 'data.torrent';
+        let originalContent = '';
+        let hasUnsavedChanges = false;
+
+        // Track changes in editor
+        editor.on('change', () => {
+            const currentContent = editor.getValue();
+            hasUnsavedChanges = currentContent !== originalContent;
+            updateSaveButton();
+        });
+
+        function updateSaveButton() {
+            const saveBtn = document.getElementById('btn-encode');
+            if (hasUnsavedChanges) {
+                saveBtn.classList.remove('disabled');
+            } else {
+                saveBtn.classList.add('disabled');
+            }
+        }
+
+        function showButtonFeedback(button, icon, duration = 1500) {
+            const originalHTML = button.innerHTML;
+            button.classList.add('success');
+            button.innerHTML = icon;
+            button.disabled = true;
+
+            setTimeout(() => {
+                button.classList.remove('success');
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }, duration);
+        }
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        document.body.addEventListener('dragenter', () => app.classList.add('drag-active'));
+        document.body.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget === null) app.classList.remove('drag-active');
+        });
+        document.body.addEventListener('drop', handleDrop);
+
+        function handleDrop(e) {
+            app.classList.remove('drag-active');
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        document.getElementById('file-input').addEventListener('change', function () {
+            handleFiles(this.files);
+        });
+
+        function handleFiles(files) {
+            if (files.length > 0) {
+                const file = files[0];
+                currentFileName = file.name;
+
+                document.getElementById('file-name').textContent = file.name;
+                document.getElementById('file-size').textContent = formatBytes(file.size);
+                document.getElementById('file-type').textContent = file.name.split('.').pop().toUpperCase();
+
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    try {
+                        const buffer = new Uint8Array(e.target.result);
+                        const decoded = Bencode.decode(buffer);
+                        const json = convertToJSON(decoded);
+                        const jsonString = JSON.stringify(json, null, 2);
+                        editor.setValue(jsonString);
+                        originalContent = jsonString;
+                        hasUnsavedChanges = false;
+                        updateSaveButton();
+                    } catch (err) {
+                        alert('Error decoding file: ' + err.message);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function copyToClipboard() {
+            const button = document.getElementById('btn-copy');
+            navigator.clipboard.writeText(editor.getValue()).then(() => {
+                showButtonFeedback(button, '✓ Copied');
+            });
+        }
+
+        document.getElementById('btn-copy').addEventListener('click', copyToClipboard);
+
+        document.getElementById('btn-encode').addEventListener('click', (e) => {
+            if (e.target.classList.contains('disabled')) return;
+
+            try {
+                const json = JSON.parse(editor.getValue());
+                const data = convertFromJSON(json);
+                const encoded = Bencode.encode(data);
+
+                const blob = new Blob([encoded], { type: 'application/x-bittorrent' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = currentFileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                // Update state after successful save
+                originalContent = editor.getValue();
+                hasUnsavedChanges = false;
+                updateSaveButton();
+                showButtonFeedback(e.target, '✓ Saved');
+            } catch (err) {
+                alert('Error encoding: ' + err.message);
+            }
+        });
+    </script>
+</body>
+
+</html>
